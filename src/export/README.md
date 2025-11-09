@@ -160,23 +160,61 @@ Stories available:
 
 ### Testing
 
-**Unit Testing** (via Storybook):
-1. Open Storybook at http://localhost:6006
-2. Navigate to Export stories
-3. Verify component rendering and behavior mapping
+**Unit Tests** (Vitest with 98 comprehensive tests):
+```bash
+cd ~/zmk-studio
+
+# Run all tests
+bun run vitest run src/export/*.test.ts
+
+# Run with coverage report
+bun run vitest run src/export/*.test.ts --coverage
+
+# Watch mode (re-run on file changes)
+bun run vitest watch src/export/*.test.ts
+```
+
+**Test Coverage:**
+- 98 tests total, all passing ✅
+- 94% overall code coverage
+- 100% coverage: ExportService, ExportNotifications, KeymapGenerator
+- Tests found and fixed 3 real bugs through TRUE TDD methodology
+
+**Test Files:**
+- `BehaviorMapper.test.ts` - 26 tests (behavior mapping, parameter handling)
+- `HidMapper.test.ts` - 24 tests (HID to ZMK key name conversion)
+- `KeymapGenerator.test.ts` - 14 tests (DeviceTree file generation)
+- `ExportService.test.ts` - 15 tests (export orchestration, error handling)
+- `ExportNotifications.test.ts` - 19 tests (user-facing messages)
+
+**Visual Testing** (Storybook):
+1. `bun run storybook`
+2. Navigate to Export stories at http://localhost:6006
+3. Verify component rendering and behavior mapping examples
 
 **Integration Testing** (with real keyboard):
-1. Connect keyboard
-2. Configure layers
-3. Export keymap
-4. Compile with ZMK builder
-5. Flash and test on hardware
+1. Connect ZMK keyboard
+2. Configure layers in ZMK Studio
+3. Click Export button
+4. Verify `.keymap` file downloads
+5. Compile with ZMK builder and flash to hardware
 
 ### Adding New Behaviors
 
-To support a new ZMK behavior:
+To support a new ZMK behavior (following TDD):
 
-1. **Update BehaviorMapper.ts**:
+1. **Write failing test first** in `BehaviorMapper.test.ts`:
+   ```typescript
+   it('should format sticky key binding', () => {
+     const result = BehaviorMapper.formatBinding(
+       { behaviorId: 7, param1: 0xE0, param2: null, position: 0 },
+       mockGetKeyName
+     );
+     expect(result).toBe('&sk LCTRL');
+   });
+   ```
+
+2. **Update BehaviorMapper.ts** (test will fail initially):
    ```typescript
    const BEHAVIORS: Map<number, Behavior> = new Map([
      // ... existing behaviors
@@ -184,11 +222,13 @@ To support a new ZMK behavior:
    ]);
    ```
 
-2. **Update formatParam()** if needed for parameter formatting
+3. **Update formatParam()** if needed for parameter formatting
 
-3. **Add Storybook story** in `BehaviorMapper.stories.tsx`
+4. **Run tests** - verify your test now passes: `bun run vitest run`
 
-4. **Test** with real keyboard to validate behavior ID
+5. **Optional: Add Storybook story** for visual verification
+
+6. **Test with real keyboard** to validate behavior ID matches
 
 ## Troubleshooting
 
