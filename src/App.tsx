@@ -2,6 +2,8 @@ import { AppHeader } from "./AppHeader";
 
 import { create_rpc_connection } from "@zmkfirmware/zmk-studio-ts-client";
 import { call_rpc } from "./rpc/logging";
+import { ExportService } from "./export/ExportService";
+import { Layer } from "./export/types";
 
 import type { Notification } from "@zmkfirmware/zmk-studio-ts-client/studio";
 import { ConnectionState, ConnectionContext } from "./rpc/ConnectionContext";
@@ -169,6 +171,7 @@ function App() {
   const [showAbout, setShowAbout] = useState(false);
   const [showLicenseNotice, setShowLicenseNotice] = useState(false);
   const [connectionAbort, setConnectionAbort] = useState(new AbortController());
+  const [isExporting, setIsExporting] = useState(false);
 
   const [lockState, setLockState] = useState<LockState>(
     LockState.ZMK_STUDIO_CORE_LOCK_STATE_LOCKED
@@ -271,6 +274,63 @@ function App() {
     doDisconnect();
   }, [conn]);
 
+  const exportKeymap = useCallback(() => {
+    async function doExport() {
+      if (!conn.conn || !connectedDeviceName) {
+        return;
+      }
+
+      setIsExporting(true);
+      try {
+        // Fetch layers from keyboard
+        const layersResp = await call_rpc(conn.conn, { keymap: { getLayers: true } });
+        const layerList = layersResp.keymap?.getLayers?.layers || [];
+
+        // Fetch bindings for each layer
+        const layers: Layer[] = await Promise.all(
+          layerList.map(async (layerInfo: any, index: number) => {
+            const layerResp = await call_rpc(conn.conn!, {
+              keymap: { getLayer: { layerId: index } },
+            });
+
+            const bindings = (layerResp.keymap?.getLayer?.bindings || []).map(
+              (b: any, position: number) => ({
+                behaviorId: b.behaviorId || 0,
+                param1: b.param1 || 0,
+                param2: b.param2,
+                position,
+              })
+            );
+
+            return {
+              id: index,
+              label: layerInfo.name || `Layer ${index}`,
+              bindings,
+            };
+          })
+        );
+
+        // Export to file
+        const result = await ExportService.exportKeymap(connectedDeviceName, layers);
+
+        if (result.success) {
+          console.log(`Export successful: ${result.filename}`);
+          // TODO: Show success toast notification
+        } else {
+          console.error(`Export failed: ${result.error?.message}`);
+          // TODO: Show error toast notification
+        }
+      } catch (error) {
+        console.error("Export error:", error);
+        // TODO: Show error toast notification
+      } finally {
+        setIsExporting(false);
+      }
+    }
+
+    doExport();
+  }, [conn, connectedDeviceName]);
+
   const onConnect = useCallback(
     (t: RpcTransport) => {
       const ac = new AbortController();
@@ -306,6 +366,8 @@ function App() {
               onDiscard={discard}
               onDisconnect={disconnect}
               onResetSettings={resetSettings}
+              onExport={exportKeymap}
+              isExporting={isExporting}
             />
             <Keyboard />
             <AppFooter
