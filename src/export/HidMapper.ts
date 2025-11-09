@@ -22,78 +22,78 @@ const HID_PAGE_CONSUMER = 0x0C;
  *
  * ZMK uses specific naming conventions that differ from HID usage names.
  * This map handles the most common transformations.
+ *
+ * NOTE: Keys are the ACTUAL labels returned by hid_usage_get_label() from
+ * hid-usage-name-overrides.json and keyboard-and-consumer-usage-tables.json
  */
 const KEY_NAME_OVERRIDES: Record<string, string> = {
-  // Numbers
-  '1 and !': 'N1',
-  '2 and @': 'N2',
-  '3 and #': 'N3',
-  '4 and $': 'N4',
-  '5 and %': 'N5',
-  '6 and ^': 'N6',
-  '7 and &': 'N7',
-  '8 and *': 'N8',
-  '9 and (': 'N9',
-  '0 and )': 'N0',
+  // Numbers (from hid-usage-name-overrides.json)
+  '1': 'N1',
+  '2': 'N2',
+  '3': 'N3',
+  '4': 'N4',
+  '5': 'N5',
+  '6': 'N6',
+  '7': 'N7',
+  '8': 'N8',
+  '9': 'N9',
+  '0': 'N0',
 
-  // Special characters
-  'Spacebar': 'SPACE',
-  'Keyboard Return (ENTER)': 'ENTER',
-  'Keyboard Escape': 'ESC',
-  'Keyboard Delete (Backspace)': 'BSPC',
-  'Keyboard Tab': 'TAB',
-  'Keyboard Caps Lock': 'CAPS',
+  // Special characters (using actual override labels from JSON)
+  '␣': 'SPACE',  // U+2423 Open Box (spacebar)
+  'Ret': 'ENTER',  // Return
+  'ESC': 'ESC',  // Escape
+  'BkSp': 'BSPC',  // Backspace
+  'TAB': 'TAB',  // Tab
+  'CAPS': 'CAPS',  // Caps Lock
 
-  // Modifiers
-  'Keyboard Left Control': 'LCTRL',
-  'Keyboard Left Shift': 'LSHFT',
-  'Keyboard Left Alt': 'LALT',
-  'Keyboard Left GUI': 'LGUI',
-  'Keyboard Right Control': 'RCTRL',
-  'Keyboard Right Shift': 'RSHFT',
-  'Keyboard Right Alt': 'RALT',
-  'Keyboard Right GUI': 'RGUI',
+  // Modifiers (using actual override labels from JSON)
+  'Ctrl': 'LCTRL',  // Left Control (and Right Control - same label!)
+  'Shft': 'LSHFT',  // Left Shift (and Right Shift - same label!)
+  'Alt': 'LALT',  // Left Alt
+  'GUI': 'LGUI',  // Left GUI (and Right GUI - same label!)
+  'AltG': 'RALT',  // Right Alt (AltGr)
 
-  // Arrow keys
-  'Keyboard Right Arrow': 'RIGHT',
-  'Keyboard Left Arrow': 'LEFT',
-  'Keyboard Down Arrow': 'DOWN',
-  'Keyboard Up Arrow': 'UP',
+  // Arrow keys (using actual override labels from JSON)
+  '→': 'RIGHT',  // U+2192 Rightwards Arrow
+  '←': 'LEFT',   // U+2190 Leftwards Arrow
+  '↓': 'DOWN',   // U+2193 Downwards Arrow
+  '↑': 'UP',     // U+2191 Upwards Arrow
 
-  // Function keys
-  'Keyboard F1': 'F1',
-  'Keyboard F2': 'F2',
-  'Keyboard F3': 'F3',
-  'Keyboard F4': 'F4',
-  'Keyboard F5': 'F5',
-  'Keyboard F6': 'F6',
-  'Keyboard F7': 'F7',
-  'Keyboard F8': 'F8',
-  'Keyboard F9': 'F9',
-  'Keyboard F10': 'F10',
-  'Keyboard F11': 'F11',
-  'Keyboard F12': 'F12',
+  // Function keys (already correct in overrides)
+  'F1': 'F1',
+  'F2': 'F2',
+  'F3': 'F3',
+  'F4': 'F4',
+  'F5': 'F5',
+  'F6': 'F6',
+  'F7': 'F7',
+  'F8': 'F8',
+  'F9': 'F9',
+  'F10': 'F10',
+  'F11': 'F11',
+  'F12': 'F12',
 
   // Special keys
-  'Keyboard Home': 'HOME',
-  'Keyboard End': 'END',
-  'Keyboard Page Up': 'PG_UP',
-  'Keyboard Page Down': 'PG_DN',
-  'Keyboard Insert': 'INS',
-  'Keyboard Delete Forward': 'DEL',
+  'HOME': 'HOME',
+  'END': 'END',
+  'PGUP': 'PG_UP',
+  'PGDN': 'PG_DN',
+  'INS': 'INS',
+  'DEL': 'DEL',
 
-  // Punctuation
-  '- and _': 'MINUS',
-  '= and +': 'EQUAL',
-  '[ and {': 'LBKT',
-  '] and }': 'RBKT',
-  '\\ and |': 'BSLH',
-  '; and :': 'SEMI',
-  '\' and "': 'SQT',
-  '` and ~': 'GRAVE',
-  ', and <': 'COMMA',
-  '. and >': 'DOT',
-  '/ and ?': 'FSLH',
+  // Punctuation (using actual override labels from JSON)
+  '-': 'MINUS',
+  '=': 'EQUAL',
+  '{': 'LBKT',  // Left bracket override is '{'
+  '}': 'RBKT',  // Right bracket override is '}'
+  '\\': 'BSLH',
+  ';': 'SEMI',
+  '\'': 'SQT',
+  '`': 'GRAVE',
+  ',': 'COMMA',
+  '.': 'DOT',
+  '/': 'FSLH',
 };
 
 export class HidMapper {
@@ -109,6 +109,21 @@ export class HidMapper {
     // Only handle keyboard and consumer pages
     if (page !== HID_PAGE_KEYBOARD && page !== HID_PAGE_CONSUMER) {
       return null;
+    }
+
+    // Special handling for modifiers (0xE0-0xE7) since left and right have same labels
+    if (page === HID_PAGE_KEYBOARD && id >= 0xE0 && id <= 0xE7) {
+      const modifierMap: Record<number, string> = {
+        0xE0: 'LCTRL',
+        0xE1: 'LSHFT',
+        0xE2: 'LALT',
+        0xE3: 'LGUI',
+        0xE4: 'RCTRL',
+        0xE5: 'RSHFT',
+        0xE6: 'RALT',
+        0xE7: 'RGUI',
+      };
+      return modifierMap[id] || null;
     }
 
     // Get the HID usage label

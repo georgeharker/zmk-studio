@@ -73,6 +73,16 @@ export class BehaviorMapper {
 
     // Two parameter behaviors (mt, lt)
     if (behavior.paramCount === 2) {
+      // Layer-tap: param1 is layer number, param2 is key
+      if (behavior.code === 'lt') {
+        const layerNum = binding.param1.toString();
+        const keyName = binding.param2 !== null && binding.param2 !== undefined
+          ? (getKeyName(binding.param2) || `/* HID 0x${binding.param2.toString(16)} */`)
+          : '/* missing key */';
+        return `&lt ${layerNum} ${keyName}`;
+      }
+
+      // Mod-tap: both params are keys/modifiers
       const param1 = this.formatParam(binding.param1, behavior, getKeyName);
       const param2 = binding.param2 !== null && binding.param2 !== undefined
         ? this.formatParam(binding.param2, behavior, getKeyName)
@@ -96,14 +106,16 @@ export class BehaviorMapper {
     behavior: Behavior,
     getKeyName: (hidUsage: number) => string | null
   ): string {
-    // For key press behaviors, convert HID code to key name
-    if (behavior.code === 'kp' || behavior.code === 'mt' || behavior.code === 'lt') {
+    // For key press and mod-tap behaviors, convert HID code to key name
+    // NOTE: lt (layer-tap) is handled specially in formatBinding()
+    if (behavior.code === 'kp' || behavior.code === 'mt') {
       const keyName = getKeyName(value);
       return keyName || `/* HID 0x${value.toString(16)} */`;
     }
 
-    // For layer behaviors, return layer number
-    if (behavior.code === 'mo' || behavior.code === 'tog' || behavior.code === 'lt') {
+    // For layer behaviors (mo, tog), return layer number
+    // NOTE: lt (layer-tap) is handled specially in formatBinding()
+    if (behavior.code === 'mo' || behavior.code === 'tog') {
       return value.toString();
     }
 
