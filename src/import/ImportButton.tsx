@@ -4,10 +4,9 @@
  * Displays a button with Upload icon that opens file picker for .keymap files
  */
 
-import { Button, TooltipTrigger } from 'react-aria-components';
+import { Button, Tooltip, TooltipTrigger } from 'react-aria-components';
 import { Upload } from 'lucide-react';
 import { useRef } from 'react';
-import { Tooltip } from '../misc/Tooltip';
 
 export interface ImportButtonProps {
   onImport: (file: File) => void | Promise<void>;
@@ -63,7 +62,9 @@ export function ImportButton({
             <span className="ml-1 text-sm">Importing...</span>
           )}
         </Button>
-        <Tooltip label={tooltip}>{tooltip}</Tooltip>
+        <Tooltip className="bg-gray-800 text-white px-2 py-1 rounded text-sm max-w-xs">
+          {tooltip}
+        </Tooltip>
       </TooltipTrigger>
     </>
   );

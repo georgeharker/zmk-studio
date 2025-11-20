@@ -3,11 +3,13 @@ import { AppHeader } from "./AppHeader";
 import { create_rpc_connection } from "@zmkfirmware/zmk-studio-ts-client";
 import { call_rpc } from "./rpc/logging";
 import { ExportService } from "./export/ExportService";
+import { ImportService } from "./import/ImportService";
 import { Layer } from "./export/types";
+import { Keymap } from "@zmkfirmware/zmk-studio-ts-client/keymap";
 
 import type { Notification } from "@zmkfirmware/zmk-studio-ts-client/studio";
 import { ConnectionState, ConnectionContext } from "./rpc/ConnectionContext";
-import { Dispatch, useCallback, useEffect, useState } from "react";
+import React, { Dispatch, useCallback, useEffect, useState } from "react";
 import { ConnectModal, TransportFactory } from "./ConnectModal";
 
 import type { RpcTransport } from "@zmkfirmware/zmk-studio-ts-client/transport/index";
@@ -172,10 +174,17 @@ function App() {
   const [showLicenseNotice, setShowLicenseNotice] = useState(false);
   const [connectionAbort, setConnectionAbort] = useState(new AbortController());
   const [isExporting, setIsExporting] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
 
   const [lockState, setLockState] = useState<LockState>(
     LockState.ZMK_STUDIO_CORE_LOCK_STATE_LOCKED
   );
+
+  // Store keymap ref from Keyboard component
+  const keymapRef = React.useRef<Keymap | undefined>(undefined);
+  const setKeymapForExport = React.useCallback((km: Keymap | undefined) => {
+    keymapRef.current = km;
+  }, []);
 
   useSub("rpc_notification.core.lockStateChanged", (ls) => {
     setLockState(ls);
@@ -276,39 +285,32 @@ function App() {
 
   const exportKeymap = useCallback(() => {
     async function doExport() {
-      if (!conn.conn || !connectedDeviceName) {
+      const keymap = keymapRef.current;
+      console.log("[Export] Button clicked", { connectedDeviceName, hasKeymap: !!keymap });
+
+      if (!connectedDeviceName || !keymap) {
+        console.warn("Cannot export: no device connected or keymap not loaded", {
+          connectedDeviceName,
+          hasKeymap: !!keymap,
+          keymapLayers: keymap?.layers?.length
+        });
         return;
       }
 
+      console.log("[Export] Starting export...", { layerCount: keymap.layers.length });
       setIsExporting(true);
       try {
-        // Fetch layers from keyboard
-        const layersResp = await call_rpc(conn.conn, { keymap: { getLayers: true } });
-        const layerList = layersResp.keymap?.getLayers?.layers || [];
-
-        // Fetch bindings for each layer
-        const layers: Layer[] = await Promise.all(
-          layerList.map(async (layerInfo: any, index: number) => {
-            const layerResp = await call_rpc(conn.conn!, {
-              keymap: { getLayer: { layerId: index } },
-            });
-
-            const bindings = (layerResp.keymap?.getLayer?.bindings || []).map(
-              (b: any, position: number) => ({
-                behaviorId: b.behaviorId || 0,
-                param1: b.param1 || 0,
-                param2: b.param2,
-                position,
-              })
-            );
-
-            return {
-              id: index,
-              label: layerInfo.name || `Layer ${index}`,
-              bindings,
-            };
-          })
-        );
+        // Transform keymap data to Layer[] format for ExportService
+        const layers: Layer[] = keymap.layers.map((layer, index) => ({
+          id: index,
+          label: layer.name || `Layer ${index}`,
+          bindings: layer.bindings.map((binding, position) => ({
+            behaviorId: binding.behaviorId || 0,
+            param1: binding.param1 || 0,
+            param2: binding.param2,
+            position,
+          })),
+        }));
 
         // Export to file
         const result = await ExportService.exportKeymap(connectedDeviceName, layers);
@@ -329,6 +331,55 @@ function App() {
     }
 
     doExport();
+  }, [connectedDeviceName]);
+
+  const importKeymap = useCallback(async (file: File) => {
+    if (!conn.conn || !connectedDeviceName) {
+      console.warn("Cannot import: no device connected");
+      return;
+    }
+
+    setIsImporting(true);
+    try {
+      // Read file content
+      const content = await file.text();
+
+      // Import and parse the keymap
+      const result = await ImportService.importFromString(content);
+
+      if (!result.success || !result.layers) {
+        console.error(`Import failed: ${result.error?.message}`);
+        // TODO: Show error toast notification
+        return;
+      }
+
+      // Apply imported layers to the keyboard
+      for (const layer of result.layers) {
+        for (const binding of layer.bindings) {
+          await call_rpc(conn.conn, {
+            keymap: {
+              setLayerBinding: {
+                layerId: layer.id,
+                keyPosition: binding.position,
+                binding: {
+                  behaviorId: binding.behaviorId,
+                  param1: binding.param1 || 0,
+                  param2: binding.param2 ?? 0,
+                },
+              },
+            },
+          });
+        }
+      }
+
+      console.log(`Import successful: ${result.layers.length} layers imported`);
+      // TODO: Show success toast notification
+    } catch (error) {
+      console.error("Import error:", error);
+      // TODO: Show error toast notification
+    } finally {
+      setIsImporting(false);
+    }
   }, [conn, connectedDeviceName]);
 
   const onConnect = useCallback(
@@ -368,8 +419,10 @@ function App() {
               onResetSettings={resetSettings}
               onExport={exportKeymap}
               isExporting={isExporting}
+              onImport={importKeymap}
+              isImporting={isImporting}
             />
-            <Keyboard />
+            <Keyboard onKeymapChange={setKeymapForExport} />
             <AppFooter
               onShowAbout={() => setShowAbout(true)}
               onShowLicenseNotice={() => setShowLicenseNotice(true)}

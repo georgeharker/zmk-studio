@@ -158,7 +158,11 @@ function useLayouts(): [
   ];
 }
 
-export default function Keyboard() {
+interface KeyboardProps {
+  onKeymapChange?: (keymap: Keymap | undefined) => void;
+}
+
+export default function Keyboard({ onKeymapChange }: KeyboardProps = {}) {
   const [
     layouts,
     _setLayouts,
@@ -168,11 +172,21 @@ export default function Keyboard() {
   const [keymap, setKeymap] = useConnectedDeviceData<Keymap>(
     { keymap: { getKeymap: true } },
     (keymap) => {
-      console.log("Got the keymap!");
-      return keymap?.keymap?.getKeymap;
+      const keymapData = keymap?.keymap?.getKeymap;
+      console.log("Got the keymap!", {
+        layers: keymapData?.layers?.length,
+        availableLayers: keymapData?.availableLayers,
+        maxLayerNameLength: keymapData?.maxLayerNameLength
+      });
+      return keymapData;
     },
     true
   );
+
+  // Notify parent when keymap changes
+  useEffect(() => {
+    onKeymapChange?.(keymap);
+  }, [keymap, onKeymapChange]);
 
   const [keymapScale, setKeymapScale] = useLocalStorageState<LayoutZoom>("keymapScale", "auto", {
     deserialize: deserializeLayoutZoom,
