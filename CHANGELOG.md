@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.1-e 
+
+- add exports
+
 ## [0.3.1](https://github.com/zmkfirmware/zmk-studio/compare/v0.3.0...v0.3.1) (2025-01-20)
 
 
